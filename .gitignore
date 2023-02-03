@@ -108,3 +108,4 @@ pip-delete-this-directory.txt
 .DS_Store
 
 attention/attention/data/processed_reviews/
+**/nltk_data
