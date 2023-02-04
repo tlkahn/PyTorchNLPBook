@@ -24,7 +24,8 @@ from jupyter_client import kernelspec
 
 kernel_name = "pythonjvsc74a57bd0062ec1ebe3fe2ecca85a8e23aaba11b37ca655e4ad9cf5ea50892a8f80d8bea0"
 spec = kernelspec.get_kernel_spec(kernel_name)
-print(spec.resource_dir)
+# print(spec.resource_dir)
+print(spec.to_json())
 
 # %%
 import json
