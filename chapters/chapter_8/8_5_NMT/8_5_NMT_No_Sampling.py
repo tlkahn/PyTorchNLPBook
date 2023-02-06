@@ -12,22 +12,23 @@
 #     name: nlpbook
 # ---
 
+import json
+
 # %%
 import os
-from argparse import Namespace
-from collections import Counter
-import json
 import re
 import string
+from argparse import Namespace
+from collections import Counter
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+import torch.optim as optim
 from torch.nn import functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm_notebook
 
 
@@ -45,7 +46,9 @@ class Vocabulary(object):
             token_to_idx = {}
         self._token_to_idx = token_to_idx
 
-        self._idx_to_token = {idx: token for token, idx in self._token_to_idx.items()}
+        self._idx_to_token = {
+            idx: token for token, idx in self._token_to_idx.items()
+        }
 
     def to_serializable(self):
         """returns a dictionary that can be serialized"""
@@ -123,7 +126,6 @@ class SequenceVocabulary(Vocabulary):
         begin_seq_token="<BEGIN>",
         end_seq_token="<END>",
     ):
-
         super(SequenceVocabulary, self).__init__(token_to_idx)
 
         self._mask_token = mask_token
@@ -228,12 +230,16 @@ class NMTVectorizer(object):
                 x_indices (list): list of integers representing the observations in target decoder
                 y_indices (list): list of integers representing predictions in target decoder
         """
-        indices = [self.target_vocab.lookup_token(token) for token in text.split(" ")]
+        indices = [
+            self.target_vocab.lookup_token(token) for token in text.split(" ")
+        ]
         x_indices = [self.target_vocab.begin_seq_index] + indices
         y_indices = indices + [self.target_vocab.end_seq_index]
         return x_indices, y_indices
 
-    def vectorize(self, source_text, target_text, use_dataset_max_lengths=True):
+    def vectorize(
+        self, source_text, target_text, use_dataset_max_lengths=True
+    ):
         """Return the vectorized source and target text
 
         The vetorized source text is just the a single vector.
@@ -264,7 +270,9 @@ class NMTVectorizer(object):
             mask_index=self.source_vocab.mask_index,
         )
 
-        target_x_indices, target_y_indices = self._get_target_indices(target_text)
+        target_x_indices, target_y_indices = self._get_target_indices(
+            target_text
+        )
         target_x_vector = self._vectorize(
             target_x_indices,
             vector_length=target_vector_length,
@@ -310,12 +318,18 @@ class NMTVectorizer(object):
             for token in target_tokens:
                 target_vocab.add_token(token)
 
-        return cls(source_vocab, target_vocab, max_source_length, max_target_length)
+        return cls(
+            source_vocab, target_vocab, max_source_length, max_target_length
+        )
 
     @classmethod
     def from_serializable(cls, contents):
-        source_vocab = SequenceVocabulary.from_serializable(contents["source_vocab"])
-        target_vocab = SequenceVocabulary.from_serializable(contents["target_vocab"])
+        source_vocab = SequenceVocabulary.from_serializable(
+            contents["source_vocab"]
+        )
+        target_vocab = SequenceVocabulary.from_serializable(
+            contents["target_vocab"]
+        )
 
         return cls(
             source_vocab=source_vocab,
@@ -375,7 +389,9 @@ class NMTDataset(Dataset):
         return cls(text_df, NMTVectorizer.from_dataframe(train_subset))
 
     @classmethod
-    def load_dataset_and_load_vectorizer(cls, dataset_csv, vectorizer_filepath):
+    def load_dataset_and_load_vectorizer(
+        cls, dataset_csv, vectorizer_filepath
+    ):
         """Load dataset and the corresponding vectorizer.
         Used in the case in the vectorizer has been cached for re-use
 
@@ -459,7 +475,10 @@ def generate_nmt_batches(
 ):
     """A generator function which wraps the PyTorch DataLoader.  The NMT Version"""
     dataloader = DataLoader(
-        dataset=dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last
+        dataset=dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        drop_last=drop_last,
     )
 
     for data_dict in dataloader:
@@ -468,7 +487,9 @@ def generate_nmt_batches(
 
         out_data_dict = {}
         for name, tensor in data_dict.items():
-            out_data_dict[name] = data_dict[name][sorted_length_indices].to(device)
+            out_data_dict[name] = data_dict[name][sorted_length_indices].to(
+                device
+            )
         yield out_data_dict
 
 
@@ -488,6 +509,7 @@ def generate_nmt_batches(
 # 3. NMTModel
 #     - Combines the encoder and decoder into a single class.
 
+
 # %%
 class NMTEncoder(nn.Module):
     def __init__(self, num_embeddings, embedding_size, rnn_hidden_size):
@@ -503,7 +525,10 @@ class NMTEncoder(nn.Module):
             num_embeddings, embedding_size, padding_idx=0
         )
         self.birnn = nn.GRU(
-            embedding_size, rnn_hidden_size, bidirectional=True, batch_first=True
+            embedding_size,
+            rnn_hidden_size,
+            bidirectional=True,
+            batch_first=True,
         )
 
     def forward(self, x_source, x_lengths):
@@ -550,7 +575,8 @@ def verbose_attention(encoder_state_vectors, query_vector):
     """
     batch_size, num_vectors, vector_size = encoder_state_vectors.size()
     vector_scores = torch.sum(
-        encoder_state_vectors * query_vector.view(batch_size, 1, vector_size), dim=2
+        encoder_state_vectors * query_vector.view(batch_size, 1, vector_size),
+        dim=2,
     )
     vector_probabilities = F.softmax(vector_scores, dim=1)
     weighted_vectors = encoder_state_vectors * vector_probabilities.view(
@@ -572,13 +598,16 @@ def terse_attention(encoder_state_vectors, query_vector):
     ).squeeze()
     vector_probabilities = F.softmax(vector_scores, dim=-1)
     context_vectors = torch.matmul(
-        encoder_state_vectors.transpose(-2, -1), vector_probabilities.unsqueeze(dim=2)
+        encoder_state_vectors.transpose(-2, -1),
+        vector_probabilities.unsqueeze(dim=2),
     ).squeeze()
     return context_vectors, vector_probabilities
 
 
 class NMTDecoder(nn.Module):
-    def __init__(self, num_embeddings, embedding_size, rnn_hidden_size, bos_index):
+    def __init__(
+        self, num_embeddings, embedding_size, rnn_hidden_size, bos_index
+    ):
         """
         Args:
             num_embeddings (int): number of embeddings is also the number of
@@ -590,9 +619,13 @@ class NMTDecoder(nn.Module):
         super(NMTDecoder, self).__init__()
         self._rnn_hidden_size = rnn_hidden_size
         self.target_embedding = nn.Embedding(
-            num_embeddings=num_embeddings, embedding_dim=embedding_size, padding_idx=0
+            num_embeddings=num_embeddings,
+            embedding_dim=embedding_size,
+            padding_idx=0,
         )
-        self.gru_cell = nn.GRUCell(embedding_size + rnn_hidden_size, rnn_hidden_size)
+        self.gru_cell = nn.GRUCell(
+            embedding_size + rnn_hidden_size, rnn_hidden_size
+        )
         self.hidden_map = nn.Linear(rnn_hidden_size, rnn_hidden_size)
         self.classifier = nn.Linear(rnn_hidden_size * 2, num_embeddings)
         self.bos_index = bos_index
@@ -660,7 +693,9 @@ class NMTDecoder(nn.Module):
 
             # Step 4: Use the current hidden and context vectors to make a prediction to the next word
             prediction_vector = torch.cat((context_vectors, h_t), dim=1)
-            score_for_y_t_index = self.classifier(F.dropout(prediction_vector, 0.3))
+            score_for_y_t_index = self.classifier(
+                F.dropout(prediction_vector, 0.3)
+            )
 
             # auxillary: collect the prediction scores
             output_vectors.append(score_for_y_t_index)
@@ -715,7 +750,9 @@ class NMTModel(nn.Module):
         Returns:
             decoded_states (torch.Tensor): prediction vectors at each output step
         """
-        encoder_state, final_hidden_states = self.encoder(x_source, x_source_lengths)
+        encoder_state, final_hidden_states = self.encoder(
+            x_source, x_source_lengths
+        )
         decoded_states = self.decoder(
             encoder_state=encoder_state,
             initial_hidden_state=final_hidden_states,
@@ -726,6 +763,7 @@ class NMTModel(nn.Module):
 
 # %% [markdown]
 # ## Training Routine and Bookkeeping Functions
+
 
 # %%
 def set_seed_everywhere(seed, cuda):
@@ -869,7 +907,8 @@ if args.expand_filepaths_to_save_dir:
 if not torch.cuda.is_available():
     args.cuda = False
 
-args.device = torch.device("cuda" if args.cuda else "cpu")
+# args.device = torch.device("cuda" if args.cuda else "cpu")
+args.device = torch.device("cuda" if args.cuda else "mps")
 
 print("Using CUDA: {}".format(args.cuda))
 
@@ -918,7 +957,9 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(
 mask_index = vectorizer.target_vocab.mask_index
 train_state = make_train_state(args)
 
-epoch_bar = tqdm_notebook(desc="training routine", total=args.num_epochs, position=0)
+epoch_bar = tqdm_notebook(
+    desc="training routine", total=args.num_epochs, position=0
+)
 
 dataset.set_split("train")
 train_bar = tqdm_notebook(
@@ -976,11 +1017,15 @@ try:
             # compute the running loss and running accuracy
             running_loss += (loss.item() - running_loss) / (batch_index + 1)
 
-            acc_t = compute_accuracy(y_pred, batch_dict["y_target"], mask_index)
+            acc_t = compute_accuracy(
+                y_pred, batch_dict["y_target"], mask_index
+            )
             running_acc += (acc_t - running_acc) / (batch_index + 1)
 
             # update bar
-            train_bar.set_postfix(loss=running_loss, acc=running_acc, epoch=epoch_index)
+            train_bar.set_postfix(
+                loss=running_loss, acc=running_acc, epoch=epoch_index
+            )
             train_bar.update()
 
         train_state["train_loss"].append(running_loss)
@@ -1011,11 +1056,15 @@ try:
             # compute the running loss and accuracy
             running_loss += (loss.item() - running_loss) / (batch_index + 1)
 
-            acc_t = compute_accuracy(y_pred, batch_dict["y_target"], mask_index)
+            acc_t = compute_accuracy(
+                y_pred, batch_dict["y_target"], mask_index
+            )
             running_acc += (acc_t - running_acc) / (batch_index + 1)
 
             # Update bar
-            val_bar.set_postfix(loss=running_loss, acc=running_acc, epoch=epoch_index)
+            val_bar.set_postfix(
+                loss=running_loss, acc=running_acc, epoch=epoch_index
+            )
             val_bar.update()
 
         train_state["val_loss"].append(running_loss)
@@ -1041,17 +1090,20 @@ except KeyboardInterrupt:
 # %%
 model.eval()
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 # %%
 from nltk.translate import bleu_score
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 chencherry = bleu_score.SmoothingFunction()
 
 
 # %%
 def sentence_from_indices(indices, vocab, strict=True, return_string=True):
-    ignore_indices = set([vocab.mask_index, vocab.begin_seq_index, vocab.end_seq_index])
+    ignore_indices = set(
+        [vocab.mask_index, vocab.begin_seq_index, vocab.end_seq_index]
+    )
     out = []
     for index in indices:
         if index == vocab.begin_seq_index and strict:
@@ -1080,20 +1132,24 @@ class NMTSampler:
         )
         self._last_batch["y_pred"] = y_pred
 
-        attention_batched = np.stack(self.model.decoder._cached_p_attn).transpose(
-            1, 0, 2
-        )
+        attention_batched = np.stack(
+            self.model.decoder._cached_p_attn
+        ).transpose(1, 0, 2)
         self._last_batch["attention"] = attention_batched
 
     def _get_source_sentence(self, index, return_string=True):
         indices = self._last_batch["x_source"][index].cpu().detach().numpy()
         vocab = self.vectorizer.source_vocab
-        return sentence_from_indices(indices, vocab, return_string=return_string)
+        return sentence_from_indices(
+            indices, vocab, return_string=return_string
+        )
 
     def _get_reference_sentence(self, index, return_string=True):
         indices = self._last_batch["y_target"][index].cpu().detach().numpy()
         vocab = self.vectorizer.target_vocab
-        return sentence_from_indices(indices, vocab, return_string=return_string)
+        return sentence_from_indices(
+            indices, vocab, return_string=return_string
+        )
 
     def _get_sampled_sentence(self, index, return_string=True):
         _, all_indices = torch.max(self._last_batch["y_pred"], dim=2)
@@ -1105,11 +1161,15 @@ class NMTSampler:
 
     def get_ith_item(self, index, return_string=True):
         output = {
-            "source": self._get_source_sentence(index, return_string=return_string),
+            "source": self._get_source_sentence(
+                index, return_string=return_string
+            ),
             "reference": self._get_reference_sentence(
                 index, return_string=return_string
             ),
-            "sampled": self._get_sampled_sentence(index, return_string=return_string),
+            "sampled": self._get_sampled_sentence(
+                index, return_string=return_string
+            ),
             "attention": self._last_batch["attention"][index],
         }
 
@@ -1199,7 +1259,8 @@ def get_source_sentence(vectorizer, batch_dict, index):
 
 def get_true_sentence(vectorizer, batch_dict, index):
     return sentence_from_indices(
-        batch_dict["y_target"].cpu().data.numpy()[index], vectorizer.target_vocab
+        batch_dict["y_target"].cpu().data.numpy()[index],
+        vectorizer.target_vocab,
     )
 
 
@@ -1210,7 +1271,8 @@ def get_sampled_sentence(vectorizer, batch_dict, index):
         target_sequence=batch_dict["x_target"],
     )
     return sentence_from_indices(
-        torch.max(y_pred, dim=2)[1].cpu().data.numpy()[index], vectorizer.target_vocab
+        torch.max(y_pred, dim=2)[1].cpu().data.numpy()[index],
+        vectorizer.target_vocab,
     )
 
 
@@ -1223,7 +1285,9 @@ def get_all_sentences(vectorizer, batch_dict, index):
 
 
 def sentence_from_indices(indices, vocab, strict=True):
-    ignore_indices = set([vocab.mask_index, vocab.begin_seq_index, vocab.end_seq_index])
+    ignore_indices = set(
+        [vocab.mask_index, vocab.begin_seq_index, vocab.end_seq_index]
+    )
     out = []
     for index in indices:
         if index == vocab.begin_seq_index and strict:
