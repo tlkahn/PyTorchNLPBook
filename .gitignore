@@ -109,3 +109,4 @@ pip-delete-this-directory.txt
 
 attention/attention/data/processed_reviews/
 **/nltk_data
+chapters/chapter_8/8_5_NMT/data/nmt
